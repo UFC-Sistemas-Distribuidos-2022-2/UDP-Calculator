@@ -8,8 +8,17 @@ import (
 )
 
 func sendResponse(conn *net.UDPConn, addr *net.UDPAddr, response string) {
-	response = "From server: Hello I got your message, your result is " + response
-	_, err := conn.WriteToUDP([]byte(response), addr)
+	var msg string = "From server: Hello I got your message, your result is " + response
+
+	data := map[string]interface{}{
+		"msg":    msg,
+		"result": response,
+	}
+
+	jsonData, err := json.Marshal(data)
+
+	_, err = conn.WriteToUDP(jsonData, addr)
+
 	if err != nil {
 		fmt.Printf("Couldn't send response %v", err)
 	}
@@ -34,7 +43,7 @@ func main() {
 		err = json.Unmarshal(p[:n], &calculateInfos)
 
 		if err != nil {
-			fmt.Printf("could not marshal json: %s\n", err)
+			fmt.Printf("could not Unmarshal json: %s\n", err)
 			return
 		}
 		res, err := calculate(calculateInfos)
@@ -52,12 +61,12 @@ func main() {
 type CalculateInfos struct {
 	OperationIndex  int
 	OperationComand string
-	FirstNumber     float32
-	SecondNumber    float32
+	FirstNumber     float64
+	SecondNumber    float64
 }
 
-func calculate(info CalculateInfos) (float32, error) {
-	var result float32
+func calculate(info CalculateInfos) (float64, error) {
+	var result float64
 	switch info.OperationIndex {
 	case 1:
 		result = info.FirstNumber + info.SecondNumber
