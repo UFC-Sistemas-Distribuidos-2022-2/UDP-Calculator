@@ -71,10 +71,12 @@ func main() {
 
 			for keepInLoopAfterReceiveResponse {
 
-				fmt.Println("Wanna save the value to use on the next operation? Y/N")
-				fmt.Scan(&saveValue)
+				if msgReceiver.Result != "error" {
+					fmt.Println("Wanna save the value to use on the next operation? Y/N")
+					fmt.Scan(&saveValue)
+				}
 
-				if strings.ToLower(saveValue) == "y" {
+				if strings.ToLower(saveValue) == "y" && msgReceiver.Result != "error" {
 					valueWasSaved = true
 					firstNumber, err = strconv.ParseFloat(msgReceiver.Result, 32)
 					if err != nil {
@@ -83,7 +85,7 @@ func main() {
 					secondNumber = 0
 					keepInLoopAfterReceiveResponse = false
 
-				} else if strings.ToLower(saveValue) == "n" {
+				} else if strings.ToLower(saveValue) == "n" || msgReceiver.Result == "error" {
 
 					valueWasSaved = false
 					firstNumber = 0
