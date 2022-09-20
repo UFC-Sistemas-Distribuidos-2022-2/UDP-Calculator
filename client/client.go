@@ -32,7 +32,7 @@ func main() {
 			return
 		}
 		comandIndex, comandString = operationMenu()
-		if comandIndex == -1 && comandString == "exit" {
+		if comandIndex == -1 && comandString == "sair" {
 			conn.Close()
 			return
 		}
