@@ -14,12 +14,15 @@ import (
 func main() {
 	var comandIndex int
 	var comandString string
-	var firstNumber float32
-	var secondNumber float32
-
-	var salvarNumber bool = false
-
+	var firstNumber float64
+	var secondNumber float64
+	var valueWasSaved bool = false
 	var keepInFor bool = true
+	var keepInLoopAfterReceiveResponse bool = true
+	var saveValue string
+	var msgReceiver MsgReceiver
+
+	fmt.Println("Bem vindo a calculadora UDP")
 
 	p := make([]byte, 2048)
 	for keepInFor {
@@ -28,24 +31,19 @@ func main() {
 			fmt.Printf("Some error %v", err)
 			return
 		}
-
-		fmt.Println("Bem vindo a calculadora UDP")
-
 		comandIndex, comandString = operationMenu()
-		if !salvarNumber {
+		if comandIndex == -1 && comandString == "sair" {
+			conn.Close()
+			return
+		}
+		if !valueWasSaved {
 			firstNumber, secondNumber = numberReceiver()
 		} else {
-			firstNumber = numberReceiverWithParams(secondNumber)
+			secondNumber = numberReceiverWithParams(firstNumber)
 		}
 
-		data := map[string]interface{}{
-			"operationIndex":  comandIndex,
-			"operationComand": comandString,
-			"firstNumber":     firstNumber,
-			"secondNumber":    secondNumber,
-		}
-
-		jsonData, err := json.Marshal(data)
+		jsonData, err := jsonBuilder(comandIndex,
+			comandString, firstNumber, secondNumber)
 
 		if err != nil {
 			fmt.Printf("could not marshal json: %s\n", err)
@@ -53,15 +51,54 @@ func main() {
 		}
 
 		_, err = conn.Write(jsonData)
+
 		if err != nil {
 			fmt.Printf("Write erro: %s\n", err)
 			return
 		}
 		//fmt.Fprintf(conn, jsonstring)
 
-		_, err = bufio.NewReader(conn).Read(p)
+		n, err := bufio.NewReader(conn).Read(p)
 		if err == nil {
-			fmt.Printf("%s\n", p)
+
+			err = json.Unmarshal(p[:n], &msgReceiver)
+			if err != nil {
+				fmt.Printf("could not Unmarshal json: %s\n", err)
+				return
+			}
+
+			fmt.Printf("%s\n", msgReceiver.Msg)
+
+			for keepInLoopAfterReceiveResponse {
+
+				if msgReceiver.Result != "error" {
+					fmt.Println("Wanna save the value to use on the next operation? Y/N")
+					fmt.Scan(&saveValue)
+				}
+
+				if strings.ToLower(saveValue) == "y" && msgReceiver.Result != "error" {
+					valueWasSaved = true
+					firstNumber, err = strconv.ParseFloat(msgReceiver.Result, 32)
+					if err != nil {
+						fmt.Printf("Some error %v\n", err)
+					}
+					secondNumber = 0
+					keepInLoopAfterReceiveResponse = false
+
+				} else if strings.ToLower(saveValue) == "n" || msgReceiver.Result == "error" {
+
+					valueWasSaved = false
+					firstNumber = 0
+					secondNumber = 0
+					keepInLoopAfterReceiveResponse = false
+
+				} else {
+					consoleClear()
+					fmt.Println("An error occurred while reading the chosen operation")
+				}
+			}
+			keepInLoopAfterReceiveResponse = true
+
 		} else {
 			fmt.Printf("Some error %v\n", err)
 		}
@@ -76,16 +113,20 @@ func operationMenu() (int, string) {
 	var comandString string
 	var comandEscolhido Operacoes
 
-	fmt.Println("Selecione a operação que deseja realizar:")
+	fmt.Println("Select the operation you want to perform:")
 
 	for loop {
-		fmt.Println("Digite 1 ou + ou Soma para somar")
-		fmt.Println("Digite 2 ou - ou subtracao para subtrair")
-		fmt.Println("Digite 3 ou / ou divisao para dividir")
-		fmt.Println("Digite 4 ou * ou multiplicacao para multiplicar")
+
+		fmt.Println("Type 1 or + or Soma to add")
+		fmt.Println("Type 2 or - or subtracao to subtract")
+		fmt.Println("Type 3 or / or divisao to divide")
+		fmt.Println("Type 4 or * or multiplicacao to multiply")
+		fmt.Println("Type 5 or sair to exit")
 
 		fmt.Scan(&comandString)
+
 		comandReturn, err := strconv.Atoi(comandString)
+
 		if err != nil {
 			if comandString == "+" || strings.ToLower(comandString) == "soma" {
 				comandEscolhido = Operacoes(1)
@@ -95,45 +136,47 @@ func operationMenu() (int, string) {
 				comandEscolhido = Operacoes(3)
 			} else if comandString == "*" || strings.ToLower(comandString) == "multiplicacao" {
 				comandEscolhido = Operacoes(4)
+			} else if strings.ToLower(comandString) == "sair" {
+				return -1, "exit"
 			} else {
 				consoleClear()
-				fmt.Println("Ocorreu um erro")
+				fmt.Println("An error occurred while reading the chosen operation")
 				continue
 			}
 			return comandEscolhido.EnumIndex(), comandEscolhido.String()
 		} else {
 			comand = comandReturn
 		}
-		//fmt.Scan(&comand)
-
+		if comand == 5 {
+			return -1, "sair"
+		}
 		if !(comand < 1 || comand > 4) {
 			comandEscolhido = Operacoes(comand)
-			fmt.Println(comandEscolhido)
 			loop = false
-			fmt.Println("O comando escolhido foi:", comandEscolhido.EnumIndex(), ":", comandEscolhido.String())
+			fmt.Println("The command chosen was:", comandEscolhido.EnumIndex(), ":", comandEscolhido.String())
 		} else {
 			consoleClear()
-			fmt.Println("Ocorreu um erro")
+			fmt.Println("An error occurred while reading the chosen operation")
 		}
 	}
 
 	return comandEscolhido.EnumIndex(), comandEscolhido.String()
 }
 
-func numberReceiver() (float32, float32) {
-	var firstNumber float32
-	var secondNumber float32
+func numberReceiver() (float64, float64) {
+	var firstNumber float64
+	var secondNumber float64
 
-	fmt.Println("Digite o Primeiro número a ser usado:")
+	fmt.Println("Enter the First number to use:")
 	fmt.Scan(&firstNumber)
-	fmt.Println("Digite o Segundo número a ser usado:")
+	fmt.Println("Enter the second number to use:")
 	fmt.Scan(&secondNumber)
 	return firstNumber, secondNumber
 }
 
-func numberReceiverWithParams(firstNumber float32) float32 {
-	var secondNumber float32
-	fmt.Println("Digite o Segundo número a ser usado:")
+func numberReceiverWithParams(firstNumber float64) float64 {
+	var secondNumber float64
+	fmt.Println("Enter the second number to use:")
 	fmt.Scan(&secondNumber)
 	return secondNumber
 }
@@ -159,4 +202,20 @@ func consoleClear() {
 	cmd := exec.Command("cmd", "/c", "cls")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
+}
+
+type MsgReceiver struct {
+	Msg    string
+	Result string
+}
+
+func jsonBuilder(comandIndex int, comandString string, firstNumber float64, secondNumber float64) ([]byte, error) {
+	data := map[string]interface{}{
+		"operationIndex":  comandIndex,
+		"operationComand": comandString,
+		"firstNumber":     firstNumber,
+		"secondNumber":    secondNumber,
+	}
+
+	return json.Marshal(data)
 }
